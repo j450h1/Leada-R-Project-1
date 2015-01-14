@@ -1,0 +1,61 @@
+bicycles <- read.csv('bike_trip_data.csv')
+
+Dataset Description: A CSV of bicycle rental transactions from the Bay Area Bike Share Data Challenge.
+
+Problem 1: What was the average total time (in minutes) used by a bicycle in the data?
+
+names(bicycles)
+summary(bicycles$Duration)
+avg_duration <- mean(bicycles$Duration)
+#1230.91 minutes
+
+Problem 2: What was the most popular day by trip frequency in this dataset?
+
+bicycles["DayofWeek"] <- as.Date(bicycles$Start.Date, format = "%m/%d/%y %H:%M")
+bicycles["DayofWeek"] <- weekdays(bicycles$Day)
+table(bicycles["DayofWeek"])
+#max(table(bicycles["DayofWeek"]))
+popular_dayofweek <- sort((table(bicycles["DayofWeek"])),decreasing = TRUE)[1]
+popweekday <- names(popular_dayofweek) 
+#Most popular day of the week
+#Thursday
+---------------------------
+#Most popular day
+bicycles["Day"] <- as.Date(bicycles$Start.Date, format = "%m/%d/%y %H:%M")
+popular_day <- sort((table(bicycles["Day"])),decreasing = TRUE)[1]
+popdate <- names(popular_day) 
+#2013-09-25 was most popular day to start a rental
+
+Problem 3 (harder): Assuming there are 30 bikes per station, find what date and time the bikes FIRST need to be rebalanced. As in, there are 0 bikes at a terminal for a customer to rent. 
+
+Problem 3 (easier): Assuming there are 30 bikes per station, find what date the bikes FIRST need to be rebalanced. As in, there are 0 bikes at a terminal for a customer to rent. Do this ignoring "Start.Date" and "End.Date" columns.
+
+#needed for aggregate functions later on
+bicycles["start_count"] = 1; bicycles["end_count"] = 1
+
+#Aggregate the number of bikes leaving station by day
+start_columns <- c("Day","Start.Station","start_count")
+dfstart <- bicycles[start_columns]
+#rename to station for later merge
+names(dfstart)[2] <- "Station"
+aggdata <- aggregate(start_count ~.,data = dfstart, sum)
+
+#Aggregate the number of bikes arriving back at the station by day
+end_columns <- c("Day","End.Station","end_count")
+dfend <- bicycles[end_columns]
+#rename to station for later merge
+names(dfend)[2] <- "Station"
+aggdata2 <- aggregate(end_count ~.,data = dfend, sum)
+
+#Merge the two dataframes
+total <- merge(aggdata,aggdata2,by=c("Day","Station"))
+total$difference <- total$end_count - total$start_count
+#bikes available at start of the day - (add 30)
+total$bikes_net30 <- ave(total$difference, total$Station, FUN=function(x) cumsum(c(0, head(x, -1))))
+#sort to view by station and date to see what bikes_net30 shows
+total <- total[order(total$Station,total$Day),]
+final <- total[total$bikes_net30 == -30,] 
+#sort ascending by date to find the earliest date that there was a net -30 balance of bikes at any station
+final <- final[order(final$Day),]
+rebalance_day <- final$Day[1]
+#2013-09-05
